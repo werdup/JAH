@@ -1,14 +1,7 @@
 import streamlit as st
-from langchain.chat_models import ChatOpenAI
-from langchain.schema import SystemMessage, HumanMessage, AIMessage
-from langchain.memory import ConversationBufferMemory
-from langchain.chains import ConversationChain
-import os
-
-# --- App Configuration ---
-st.set_page_config(page_title="Chat with Your AI", page_icon="🤖")
-
-st.title("🧠 Chat with Your AI")
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import SystemMessage, HumanMessage
 
 # --- Load System Prompt from File ---
 @st.cache_data
@@ -18,42 +11,31 @@ def load_persona():
 
 persona_prompt = load_persona()
 
-# --- Initialize Chat Model ---
-llm = ChatOpenAI(model="gpt-4o", temperature=0.6)
+# --- Sidebar for API Key ---
+st.sidebar.title("🔐 API Key Setup")
+api_key = st.sidebar.text_input("Enter your OpenAI API key:", type="password")
+if not api_key:
+    st.warning("Please enter your OpenAI API key in the sidebar.")
+    st.stop()
 
-# --- Memory Setup ---
-if "memory" not in st.session_state:
-    st.session_state.memory = ConversationBufferMemory(
-        return_messages=True,
-        memory_key="chat_history"
-    )
-
-# --- LangChain Conversation Chain ---
-conversation = ConversationChain(
-    llm=llm,
-    memory=st.session_state.memory,
-    verbose=False
+# --- Initialize LLM ---
+llm = ChatOpenAI(
+    api_key=api_key,
+    model_name="gpt-4o",
+    temperature=0.6
 )
 
-# --- Start Chat ---
-with st.form("chat_form", clear_on_submit=True):
-    user_input = st.text_input("You:", placeholder="Ask me anything...", key="input")
-    submitted = st.form_submit_button("Send")
+# --- App Title ---
+st.title("🧠 Persona Chatbot")
 
-# --- Display chat history ---
-if submitted and user_input:
-    # Inject system prompt at the start of the conversation (first message only)
-    if not st.session_state.memory.chat_memory.messages:
-        st.session_state.memory.chat_memory.messages.append(SystemMessage(content=persona_prompt))
+# --- User Input ---
+user_input = st.text_input("You:", placeholder="Ask something...")
 
-    # Get response
-    response = conversation.run(user_input)
-
-    # Show full conversation
-    for msg in st.session_state.memory.chat_memory.messages:
-        if isinstance(msg, SystemMessage):
-            continue  # skip displaying system message
-        elif isinstance(msg, HumanMessage):
-            st.markdown(f"**You:** {msg.content}")
-        elif isinstance(msg, AIMessage):
-            st.markdown(f"**AI:** {msg.content}")
+if user_input:
+    with st.spinner("Thinking..."):
+        messages = [
+            SystemMessage(content=persona_prompt),
+            HumanMessage(content=user_input)
+        ]
+        response = llm.invoke(messages)
+        st.markdown("**Bot:** " + response.content)
