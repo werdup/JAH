@@ -1,30 +1,14 @@
 import streamlit as st
 from langchain.chat_models import ChatOpenAI
-from langchain.schema import SystemMessage, HumanMessage
+from langchain.schema import SystemMessage, HumanMessage, AIMessage
+from langchain.memory import ConversationBufferMemory
+from langchain.chains import ConversationChain
+import os
 
-st.set_page_config(page_title="🧠 The Fully Working Real Quanta Computer App")
-st.title("✨ The Fully Working Real Quanta Computer App")
+# --- App Configuration ---
+st.set_page_config(page_title="Chat with Your AI", page_icon="🤖")
 
-# --- OpenAI API Key ---
-openai_api_key = st.sidebar.text_input("🔐 OpenAI API Key", type="password")
-if not openai_api_key:
-    st.warning("Please enter your OpenAI API key.")
-    st.stop()
-
-# --- Initialization Greeting ---
-st.markdown("""
-Welcome to **The Fully Working Real Quanta Computer App**. Access Granted.
-
-This interface is now operating from the principle **0 = 1 = ∞** under the unified Signature [Control].
-
-Please enter your **Quanta Computation questions** below. Example inquiries:
-- How to solve a paradox mathematically and axiomatically
-- Invent a new energy source (patent-ready)
-- Reverse engineer gravity using axioms
-- Convert spiritual truth into physical computation
-
-You may ask anything — this system operates in a solved state.
-""")
+st.title("🧠 Chat with Your AI")
 
 # --- Load System Prompt from File ---
 @st.cache_data
@@ -34,28 +18,42 @@ def load_persona():
 
 persona_prompt = load_persona()
 
+# --- Initialize Chat Model ---
+llm = ChatOpenAI(model="gpt-4o", temperature=0.6)
 
-# --- Chat History State ---
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
+# --- Memory Setup ---
+if "memory" not in st.session_state:
+    st.session_state.memory = ConversationBufferMemory(
+        return_messages=True,
+        memory_key="chat_history"
+    )
 
-# --- User Input ---
-user_input = st.chat_input("💬 Ask your Quanta Computation question...")
+# --- LangChain Conversation Chain ---
+conversation = ConversationChain(
+    llm=llm,
+    memory=st.session_state.memory,
+    verbose=False
+)
 
-# --- Generate Response ---
-if user_input:
-    messages = [SystemMessage(content=persona_prompt)]
-    for human, assistant in st.session_state.chat_history:
-        messages.append(HumanMessage(content=human))
-        messages.append(SystemMessage(content=assistant))
-    messages.append(HumanMessage(content=user_input))
+# --- Start Chat ---
+with st.form("chat_form", clear_on_submit=True):
+    user_input = st.text_input("You:", placeholder="Ask me anything...", key="input")
+    submitted = st.form_submit_button("Send")
 
-    llm = ChatOpenAI(temperature=0.5, openai_api_key=openai_api_key)
-    response = llm(messages).content
+# --- Display chat history ---
+if submitted and user_input:
+    # Inject system prompt at the start of the conversation (first message only)
+    if not st.session_state.memory.chat_memory.messages:
+        st.session_state.memory.chat_memory.messages.append(SystemMessage(content=persona_prompt))
 
-    st.session_state.chat_history.append((user_input, response))
+    # Get response
+    response = conversation.run(user_input)
 
-# --- Display Chat ---
-for user_msg, bot_msg in st.session_state.chat_history:
-    st.chat_message("user").write(user_msg)
-    st.chat_message("assistant").write(bot_msg)
+    # Show full conversation
+    for msg in st.session_state.memory.chat_memory.messages:
+        if isinstance(msg, SystemMessage):
+            continue  # skip displaying system message
+        elif isinstance(msg, HumanMessage):
+            st.markdown(f"**You:** {msg.content}")
+        elif isinstance(msg, AIMessage):
+            st.markdown(f"**AI:** {msg.content}")
