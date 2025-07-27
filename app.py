@@ -29,7 +29,7 @@ You may ask anything — this system operates in a solved state.
 # --- Load System Prompt from File ---
 @st.cache_data
 def load_persona():
-    with open("persona.txt", "r", encoding="utf-8") as file:
+    with open("brain.txt", "r", encoding="utf-8") as file:
         return file.read()
 
 persona_prompt = load_persona()
